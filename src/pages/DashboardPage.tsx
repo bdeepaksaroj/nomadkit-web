@@ -10,11 +10,11 @@ const FREE_LIMIT = 3
 export default function DashboardPage() {
   const navigate = useNavigate()
   const { user, clearAuth } = useAuthStore()
-  const [search, setSearch] = useState('')
+  const storageKey = `freeCountries_${user?.id || 'guest'}`
   const [savedFree, setSavedFree] = useState<string[]>(() => {
-    try { return JSON.parse(localStorage.getItem('freeCountries') || '[]') } catch { return [] }
+    try { return JSON.parse(localStorage.getItem(storageKey) || '[]') } catch { return [] }
   })
-  const [selectMode, setSelectMode] = useState(false)
+  const [search, setSearch] = useState('')
 
   const { data: subData } = useQuery({
     queryKey: ['subscription'],
@@ -26,11 +26,12 @@ export default function DashboardPage() {
 
   const { data: countriesData, isLoading } = useQuery({
     queryKey: ['countries'],
-    queryFn: async () => {
-      const res = await api.get('/api/countries')
-      const raw = res.data.data
-      return (typeof raw === 'string' ? JSON.parse(raw) : raw) as any[]
-    },
+queryFn: async () => {
+  const res = await api.get('/api/countries')
+  const raw = res.data.data
+  const parsed = (typeof raw === 'string' ? JSON.parse(raw) : raw) as any[]
+  return parsed.filter((c: any) => c && c.code)
+},
   })
 
   const isSubscribed = subData?.subscribed
@@ -60,22 +61,21 @@ export default function DashboardPage() {
         return prev
       }
       const next = [...prev, code]
-      localStorage.setItem('freeCountries', JSON.stringify(next))
-      if (next.length === FREE_LIMIT) {
-        toast.success('🔒 3 countries locked in permanently. Upgrade anytime for all 194.')
-        setTimeout(() => { setSelectMode(false); setSearch('') }, 1000)
+      localStorage.setItem(storageKey, JSON.stringify(next))
+      const remaining = FREE_LIMIT - next.length
+      if (remaining === 0) {
+        toast.success('🔒 All 3 countries locked in permanently!')
       } else {
-        toast.success(`${next.length}/${FREE_LIMIT} selected — pick ${FREE_LIMIT - next.length} more`)
+        toast.success(`✓ ${code} added — you can still pick ${remaining} more`)
       }
       return next
     })
   }
 
+  const isFullyLocked = !isSubscribed && savedFree.length >= FREE_LIMIT
   const displayCountries = isSubscribed
     ? filtered
     : countries.filter((c: any) => savedFree.includes(c.code))
-
-  const isFullyLocked = !isSubscribed && savedFree.length >= FREE_LIMIT
 
   return (
     <div style={{ minHeight: '100vh', background: '#06060a', color: '#fff', fontFamily: "'DM Sans', sans-serif" }}>
@@ -85,7 +85,7 @@ export default function DashboardPage() {
         .country-card:hover { background: rgba(124,58,237,0.1) !important; border-color: rgba(124,58,237,0.3) !important; transform: translateY(-3px); box-shadow: 0 12px 30px rgba(0,0,0,0.3); }
         .select-card { transition: all 0.2s; cursor: pointer; }
         .select-card:hover { border-color: rgba(124,58,237,0.4) !important; transform: translateY(-2px); }
-        .locked-card { cursor: not-allowed; opacity: 0.7; }
+        .locked-card { cursor: not-allowed; }
         .nav-btn { transition: all 0.2s; }
         .nav-btn:hover { background: rgba(255,255,255,0.08) !important; color: #fff !important; }
         input::placeholder { color: rgba(255,255,255,0.3); }
@@ -121,15 +121,15 @@ export default function DashboardPage() {
             {isSubscribed
               ? 'Search any of the 194 countries for emergency contacts, food guides, scam alerts and more.'
               : isFullyLocked
-                ? '🔒 Your 3 countries are permanently locked. Upgrade to access all 194.'
-                : `Free plan — pick ${FREE_LIMIT} countries. Once picked they are locked forever.`}
+                ? '🔒 Your countries are permanently locked. Upgrade to access all 194.'
+                : `Free plan — pick up to ${FREE_LIMIT} countries. Once picked, a country is locked forever.`}
           </p>
         </div>
 
         {/* Stats */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 36 }}>
           {[
-            { icon: '🌍', label: 'Countries', value: isSubscribed ? '194' : `${savedFree.length}/${FREE_LIMIT} 🔒` },
+            { icon: '🌍', label: 'Countries', value: isSubscribed ? '194' : `${savedFree.length}/${FREE_LIMIT}` },
             { icon: '🚨', label: 'Emergency', value: 'Always on' },
             { icon: '💱', label: 'Currencies', value: '150+' },
             { icon: '⚠️', label: 'Scam alerts', value: 'Live' },
@@ -147,16 +147,32 @@ export default function DashboardPage() {
         {/* ── FREE PLAN ── */}
         {!isSubscribed && (
           <>
-            {/* Locked countries view */}
-            {isFullyLocked && !selectMode && (
-              <div style={{ marginBottom: 32 }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.5)' }}>
-                    🔒 Your 3 locked countries
-                  </div>
-                  <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.25)' }}>Upgrade to change</div>
+            {/* Info banner */}
+            <div style={{ background: 'rgba(124,58,237,0.08)', border: '1px solid rgba(124,58,237,0.2)', borderRadius: 16, padding: '16px 20px', marginBottom: 24, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 3 }}>
+                  {isFullyLocked
+                    ? `🔒 All ${FREE_LIMIT} slots used — countries locked permanently`
+                    : `Free plan — ${savedFree.length}/${FREE_LIMIT} countries selected`}
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(110px,1fr))', gap: 10, marginBottom: 0 }}>
+                <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>
+                  {isFullyLocked
+                    ? 'Upgrade to Pro to access all 194 countries and change your selection anytime.'
+                    : `You can pick up to ${FREE_LIMIT} countries. Once selected, each country is permanently locked.`}
+                </div>
+              </div>
+              <Link to="/subscribe" style={{ fontFamily: 'inherit', fontSize: 12, fontWeight: 700, background: 'linear-gradient(135deg,#7c3aed,#2563eb)', color: '#fff', padding: '8px 18px', borderRadius: 8, display: 'inline-block', whiteSpace: 'nowrap' }}>
+                Upgrade to Pro →
+              </Link>
+            </div>
+
+            {/* Selected countries */}
+            {savedFree.length > 0 && (
+              <div style={{ marginBottom: 28 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.4)', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 1 }}>
+                  Your locked countries
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(110px,1fr))', gap: 10 }}>
                   {displayCountries.map((country: any) => (
                     <Link
                       key={country.code}
@@ -174,26 +190,21 @@ export default function DashboardPage() {
               </div>
             )}
 
-            {/* Select mode — shown when not fully locked yet */}
+            {/* Pick more countries — only if not fully locked */}
             {!isFullyLocked && (
               <div style={{ marginBottom: 32 }}>
-                <div style={{ background: 'rgba(124,58,237,0.08)', border: '1px solid rgba(124,58,237,0.2)', borderRadius: 16, padding: '20px 24px', marginBottom: 20 }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>
-                    Choose your {FREE_LIMIT} countries — choose wisely!
-                  </div>
-                  <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.45)' }}>
-                    Selected: {savedFree.length}/{FREE_LIMIT} — Once picked, a country is locked forever. Upgrade to change.
-                  </div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.4)', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 1 }}>
+                  Pick from all countries ({FREE_LIMIT - savedFree.length} slot{FREE_LIMIT - savedFree.length !== 1 ? 's' : ''} remaining)
                 </div>
 
-                <div style={{ position: 'relative', marginBottom: 20 }}>
+                <div style={{ position: 'relative', marginBottom: 16 }}>
                   <span style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', fontSize: 16, opacity: 0.4 }}>🔍</span>
                   <input
                     type="text"
                     value={search}
                     onChange={e => setSearch(e.target.value)}
                     placeholder="Search countries..."
-                    style={{ fontFamily: 'inherit', width: '100%', fontSize: 15, padding: '14px 16px 14px 44px', borderRadius: 12, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.04)', color: '#fff' }}
+                    style={{ fontFamily: 'inherit', width: '100%', fontSize: 15, padding: '13px 16px 13px 44px', borderRadius: 12, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.04)', color: '#fff' }}
                   />
                   {search && (
                     <button onClick={() => setSearch('')} style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)', cursor: 'pointer', fontSize: 18 }}>×</button>
@@ -201,43 +212,29 @@ export default function DashboardPage() {
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(110px,1fr))', gap: 10 }}>
-                  {filtered.map((country: any) => {
-                    const isSelected = savedFree.includes(country.code)
-                    return (
-                      <div
-                        key={country.code}
-                        className={isSelected ? 'locked-card' : 'select-card'}
-                        onClick={() => toggleFreeCountry(country.code)}
-                        style={{
-                          background: isSelected ? 'rgba(124,58,237,0.18)' : 'rgba(255,255,255,0.03)',
-                          border: `1px solid ${isSelected ? 'rgba(124,58,237,0.5)' : 'rgba(255,255,255,0.07)'}`,
-                          borderRadius: 14,
-                          padding: '18px 10px',
-                          textAlign: 'center',
-                          position: 'relative',
-                        }}
-                      >
-                        {isSelected && (
-                          <div style={{ position: 'absolute', top: 6, right: 6, width: 18, height: 18, borderRadius: '50%', background: '#7c3aed', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: '#fff' }}>🔒</div>
-                        )}
-                        <div style={{ fontSize: 32, marginBottom: 8 }}>{country.flag}</div>
-                        <div style={{ fontSize: 11, fontWeight: 600, color: isSelected ? '#c4b5fd' : 'rgba(255,255,255,0.7)', lineHeight: 1.3 }}>{country.name}</div>
-                        <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', marginTop: 3 }}>{country.code}</div>
-                      </div>
-                    )
-                  })}
+                  {filtered.filter((c: any) => !savedFree.includes(c.code)).map((country: any) => (
+                    <div
+                      key={country.code}
+                      className="select-card"
+                      onClick={() => toggleFreeCountry(country.code)}
+                      style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 14, padding: '18px 10px', textAlign: 'center', position: 'relative' }}
+                    >
+                      <div style={{ fontSize: 32, marginBottom: 8 }}>{country.flag}</div>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.7)', lineHeight: 1.3 }}>{country.name}</div>
+                      <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', marginTop: 3 }}>{country.code}</div>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
 
             {/* Upgrade banner */}
-            <div style={{ background: 'linear-gradient(135deg,rgba(124,58,237,0.12),rgba(37,99,235,0.08))', border: '1px solid rgba(124,58,237,0.25)', borderRadius: 20, padding: '36px 32px', textAlign: 'center', marginTop: 32 }}>
+            <div style={{ background: 'linear-gradient(135deg,rgba(124,58,237,0.12),rgba(37,99,235,0.08))', border: '1px solid rgba(124,58,237,0.25)', borderRadius: 20, padding: '36px 32px', textAlign: 'center' }}>
               <div style={{ fontSize: 36, marginBottom: 14 }}>🌍</div>
               <h3 style={{ fontFamily: "'Fraunces',serif", fontSize: 24, fontWeight: 900, letterSpacing: -1, marginBottom: 10 }}>Unlock all 194 countries</h3>
               <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.45)', marginBottom: 24, lineHeight: 1.7 }}>
-                {isFullyLocked
-                  ? 'Your 3 countries are locked. Upgrade to access all 194 countries and change your selection anytime.'
-                  : 'Upgrade to Pro to access all countries with emergency contacts, food guides, scam alerts, visa info, maps and live currency.'}
+                Upgrade to Pro to access all countries with emergency contacts,<br />
+                food guides, scam alerts, visa info, maps and live currency.
               </p>
               <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
                 <Link to="/subscribe" style={{ fontFamily: 'inherit', fontSize: 14, fontWeight: 700, background: 'linear-gradient(135deg,#7c3aed,#2563eb)', color: '#fff', padding: '13px 28px', borderRadius: 12, display: 'inline-block' }}>

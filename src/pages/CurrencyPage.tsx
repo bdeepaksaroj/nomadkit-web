@@ -1,224 +1,228 @@
-import { useState, lazy, Suspense } from 'react'
-import { Link, useParams, useNavigate } from 'react-router-dom'
+import { useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import api from '../lib/api'
 
-const CountryMap = lazy(() => import('../components/CountryMap'))
-
-const tabs = ['Emergency', 'Food', 'Scams', 'Transport', 'Visa', 'Map']
-
-export default function CountryPage() {
-  const { code } = useParams<{ code: string }>()
+export default function CurrencyPage() {
   const navigate = useNavigate()
-  const [activeTab, setActiveTab] = useState('Emergency')
+  const [from, setFrom] = useState('USD')
+  const [to, setTo] = useState('INR')
+  const [amount, setAmount] = useState('100')
+  const [result, setResult] = useState<any>(null)
+  const [converting, setConverting] = useState(false)
 
-  const { data: country, isLoading } = useQuery({
-    queryKey: ['country', code],
+  const { data: ratesData, isLoading } = useQuery({
+    queryKey: ['currency-rates'],
     queryFn: async () => {
-      const res = await api.get(`/api/countries/${code}`)
+      const res = await api.get('/api/currency/rates')
       const raw = res.data.data
-      return (typeof raw === 'string' ? JSON.parse(raw) : raw) as any
+      return (typeof raw === 'string' ? JSON.parse(raw) : raw)
     },
   })
 
-  if (isLoading) {
-    return (
-      <div style={{ minHeight: '100vh', background: '#06060a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 14 }}>Loading...</div>
-      </div>
-    )
+  const currencies = ratesData?.rates ? Object.keys(ratesData.rates).sort() : ['USD', 'EUR', 'GBP', 'INR', 'JPY', 'AUD', 'CAD', 'CHF', 'CNY', 'AED']
+
+  const handleConvert = async () => {
+    if (!amount || isNaN(Number(amount))) return
+    setConverting(true)
+    try {
+      const res = await api.get(`/api/currency/convert?from=${from}&to=${to}&amount=${amount}`)
+      setResult(res.data)
+    } catch {
+      setResult(null)
+    } finally {
+      setConverting(false)
+    }
   }
 
-  if (!country) {
-    return (
-      <div style={{ minHeight: '100vh', background: '#06060a', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16 }}>
-        <div style={{ color: 'rgba(255,255,255,0.4)' }}>Country not found</div>
-        <Link to="/dashboard" style={{ color: '#7c3aed', fontSize: 14 }}>← Back to dashboard</Link>
-      </div>
-    )
+  const swap = () => {
+    setFrom(to)
+    setTo(from)
+    setResult(null)
   }
+
+  const popularPairs = [
+    { from: 'USD', to: 'INR', label: 'USD → INR' },
+    { from: 'USD', to: 'EUR', label: 'USD → EUR' },
+    { from: 'GBP', to: 'INR', label: 'GBP → INR' },
+    { from: 'USD', to: 'JPY', label: 'USD → JPY' },
+    { from: 'EUR', to: 'GBP', label: 'EUR → GBP' },
+    { from: 'USD', to: 'AED', label: 'USD → AED' },
+  ]
 
   return (
     <div style={{ minHeight: '100vh', background: '#06060a', color: '#fff', fontFamily: "'DM Sans', sans-serif" }}>
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Fraunces:ital,opsz,wght@0,9..144,700;0,9..144,900;1,9..144,700&display=swap" rel="stylesheet" />
+      <style>{`
+        select { cursor: pointer; }
+        select option { background: #1a1a2e; color: #fff; }
+        .pair-btn { transition: all 0.18s; cursor: pointer; }
+        .pair-btn:hover { background: rgba(124,58,237,0.15) !important; border-color: rgba(124,58,237,0.4) !important; }
+        .convert-btn { transition: all 0.2s; }
+        .convert-btn:hover { transform: translateY(-2px); box-shadow: 0 12px 40px rgba(124,58,237,0.4); }
+        .close-btn { transition: all 0.18s; }
+        .close-btn:hover { background: rgba(255,255,255,0.12) !important; transform: scale(1.05); }
+        input::placeholder { color: rgba(255,255,255,0.3); }
+        input:focus { outline: none; border-color: rgba(124,58,237,0.5) !important; }
+        select:focus { outline: none; border-color: rgba(124,58,237,0.5) !important; }
+        @keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+        .fade-in { animation: fadeIn 0.3s ease both; }
+      `}</style>
 
       {/* Nav */}
-      <nav style={{ padding: '0 40px', height: 64, display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.07)', background: 'rgba(6,6,10,0.95)', backdropFilter: 'blur(20px)', position: 'sticky', top: 0, zIndex: 100 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <button onClick={() => navigate('/dashboard')} style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.7)', padding: '7px 14px', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontFamily: 'inherit' }}>← Back</button>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ width: 30, height: 30, borderRadius: 8, background: 'linear-gradient(135deg,#7c3aed,#2563eb)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>✈️</div>
-            <span style={{ fontFamily: "'Fraunces',serif", fontSize: 16, fontWeight: 700 }}>NomadKit</span>
-          </div>
+      <nav style={{ position: 'sticky', top: 0, zIndex: 100, padding: '0 clamp(16px,4vw,40px)', height: 60, display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(6,6,10,0.95)', backdropFilter: 'blur(20px)', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ width: 28, height: 28, borderRadius: 7, background: 'linear-gradient(135deg,#7c3aed,#2563eb)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13 }}>✈️</div>
+          <span style={{ fontFamily: "'Fraunces',serif", fontSize: 16, fontWeight: 700 }}>NomadKit</span>
         </div>
-        <Link to="/currency" style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)', padding: '7px 14px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.08)' }}>💱 Currency</Link>
+        <button
+          className="close-btn"
+          onClick={() => navigate('/dashboard')}
+          style={{ fontFamily: 'inherit', width: 36, height: 36, borderRadius: '50%', background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}
+        >
+          ×
+        </button>
       </nav>
 
-      {/* Header */}
-      <div style={{ background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid rgba(255,255,255,0.07)', padding: '40px 40px 0' }}>
-        <div style={{ maxWidth: 900, margin: '0 auto' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 20, marginBottom: 32 }}>
-            <span style={{ fontSize: 64 }}>{country.flag}</span>
-            <div>
-              <h1 style={{ fontFamily: "'Fraunces',serif", fontSize: 40, fontWeight: 900, letterSpacing: -2, marginBottom: 4 }}>{country.name}</h1>
-              <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.35)', fontWeight: 600, letterSpacing: 1 }}>{country.code}</span>
-            </div>
-          </div>
+      <div style={{ maxWidth: 600, margin: '0 auto', padding: '40px clamp(16px,4vw,24px)' }}>
 
-          {/* Tabs */}
-          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-            {tabs.map(tab => (
-              <button key={tab} onClick={() => setActiveTab(tab)} style={{ fontFamily: 'inherit', fontSize: 13, fontWeight: 600, padding: '10px 18px', borderRadius: '10px 10px 0 0', cursor: 'pointer', border: 'none', background: activeTab === tab ? '#fff' : 'transparent', color: activeTab === tab ? '#06060a' : 'rgba(255,255,255,0.45)', transition: 'all 0.2s' }}>
-                {tab === 'Emergency' ? '🚨' : tab === 'Food' ? '🍜' : tab === 'Scams' ? '⚠️' : tab === 'Transport' ? '🚌' : tab === 'Visa' ? '🛂' : '🗺️'} {tab}
+        {/* Header */}
+        <div style={{ marginBottom: 32 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: 2, color: '#7c3aed', marginBottom: 10 }}>Live rates</div>
+          <h1 style={{ fontFamily: "'Fraunces',serif", fontSize: 'clamp(28px,5vw,42px)', fontWeight: 900, letterSpacing: -2, marginBottom: 8 }}>
+            Currency{' '}
+            <em style={{ fontStyle: 'italic', background: 'linear-gradient(135deg,#a78bfa,#60a5fa)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>converter</em>
+          </h1>
+          {ratesData?.lastUpdated && (
+            <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.35)' }}>
+              Last updated: {new Date(ratesData.lastUpdated).toLocaleString()}
+            </p>
+          )}
+        </div>
+
+        {/* Popular pairs */}
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: 1, color: 'rgba(255,255,255,0.35)', marginBottom: 10 }}>Popular pairs</div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const }}>
+            {popularPairs.map(p => (
+              <button
+                key={p.label}
+                className="pair-btn"
+                onClick={() => { setFrom(p.from); setTo(p.to); setResult(null) }}
+                style={{ fontFamily: 'inherit', fontSize: 12, fontWeight: 600, padding: '7px 14px', borderRadius: 8, border: `1px solid ${from === p.from && to === p.to ? 'rgba(124,58,237,0.5)' : 'rgba(255,255,255,0.08)'}`, background: from === p.from && to === p.to ? 'rgba(124,58,237,0.15)' : 'rgba(255,255,255,0.03)', color: from === p.from && to === p.to ? '#a78bfa' : 'rgba(255,255,255,0.5)', cursor: 'pointer' }}
+              >
+                {p.label}
               </button>
             ))}
           </div>
         </div>
-      </div>
 
-      {/* Content */}
-      <div style={{ maxWidth: 900, margin: '0 auto', padding: '32px 40px' }}>
+        {/* Converter card */}
+        <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 20, padding: '28px 24px', marginBottom: 20 }}>
 
-        {/* EMERGENCY */}
-        {activeTab === 'Emergency' && (
-          <div>
-            <h2 style={{ fontFamily: "'Fraunces',serif", fontSize: 24, fontWeight: 700, marginBottom: 20 }}>Emergency numbers</h2>
-            {country.emergency ? (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 14 }}>
-                {[
-                  { label: 'Police', value: country.emergency.police, icon: '👮', color: '#3b82f6' },
-                  { label: 'Ambulance', value: country.emergency.ambulance, icon: '🚑', color: '#ef4444' },
-                  { label: 'Fire', value: country.emergency.fire, icon: '🚒', color: '#f97316' },
-                  { label: 'Tourist helpline', value: country.emergency.tourist, icon: '📞', color: '#22c55e' },
-                ].map(item => (
-                  <div key={item.label} style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 16, padding: '24px 20px', display: 'flex', alignItems: 'center', gap: 16 }}>
-                    <div style={{ width: 52, height: 52, borderRadius: 14, background: `${item.color}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, flexShrink: 0 }}>{item.icon}</div>
-                    <div>
-                      <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', marginBottom: 4, fontWeight: 600 }}>{item.label}</div>
-                      <div style={{ fontSize: 28, fontFamily: "'Fraunces',serif", fontWeight: 700 }}>{item.value}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : <p style={{ color: 'rgba(255,255,255,0.4)' }}>No emergency data available.</p>}
-            <div style={{ marginTop: 20, padding: '16px 20px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 12, fontSize: 13, color: 'rgba(255,255,255,0.6)', lineHeight: 1.6 }}>
-              ⚠️ Save these numbers before you travel. Emergency numbers work even without a SIM card in most countries.
+          {/* Amount */}
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: 1, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 8 }}>Amount</label>
+            <input
+              type="number"
+              value={amount}
+              onChange={e => { setAmount(e.target.value); setResult(null) }}
+              style={{ fontFamily: 'inherit', width: '100%', fontSize: 28, fontWeight: 700, padding: '16px 18px', borderRadius: 12, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.04)', color: '#fff', letterSpacing: -0.5 }}
+            />
+          </div>
+
+          {/* From / Swap / To */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: 10, alignItems: 'end', marginBottom: 24 }}>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: 1, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 8 }}>From</label>
+              <select
+                value={from}
+                onChange={e => { setFrom(e.target.value); setResult(null) }}
+                style={{ fontFamily: 'inherit', width: '100%', fontSize: 15, fontWeight: 600, padding: '13px 14px', borderRadius: 12, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.04)', color: '#fff' }}
+              >
+                {currencies.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+
+            <button
+              onClick={swap}
+              style={{ fontFamily: 'inherit', width: 42, height: 42, borderRadius: '50%', background: 'rgba(124,58,237,0.15)', border: '1px solid rgba(124,58,237,0.3)', color: '#a78bfa', cursor: 'pointer', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.18s', marginBottom: 2 }}
+              title="Swap currencies"
+            >
+              ⇄
+            </button>
+
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: 1, color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 8 }}>To</label>
+              <select
+                value={to}
+                onChange={e => { setTo(e.target.value); setResult(null) }}
+                style={{ fontFamily: 'inherit', width: '100%', fontSize: 15, fontWeight: 600, padding: '13px 14px', borderRadius: 12, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.04)', color: '#fff' }}
+              >
+                {currencies.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+          </div>
+
+          {/* Convert button */}
+          <button
+            className="convert-btn"
+            onClick={handleConvert}
+            disabled={converting || isLoading}
+            style={{ fontFamily: 'inherit', width: '100%', fontSize: 15, fontWeight: 700, padding: '16px 0', borderRadius: 12, border: 'none', background: 'linear-gradient(135deg,#7c3aed,#2563eb)', color: '#fff', cursor: converting ? 'not-allowed' : 'pointer', opacity: converting ? 0.7 : 1 }}
+          >
+            {converting ? 'Converting...' : `Convert ${amount || '0'} ${from} to ${to}`}
+          </button>
+        </div>
+
+        {/* Result */}
+        {result && (
+          <div className="fade-in" style={{ background: 'linear-gradient(135deg,rgba(124,58,237,0.12),rgba(37,99,235,0.08))', border: '1px solid rgba(124,58,237,0.25)', borderRadius: 20, padding: '28px 24px', textAlign: 'center' as const, marginBottom: 20 }}>
+            <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)', marginBottom: 8 }}>
+              {result.amount} {result.from} equals
+            </div>
+            <div style={{ fontFamily: "'Fraunces',serif", fontSize: 52, fontWeight: 900, letterSpacing: -2, marginBottom: 8, background: 'linear-gradient(135deg,#a78bfa,#60a5fa)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+              {result.converted.toLocaleString()} {result.to}
+            </div>
+            <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.35)' }}>
+              1 {result.from} = {result.rate} {result.to}
             </div>
           </div>
         )}
 
-        {/* FOOD */}
-        {activeTab === 'Food' && (
-          <div>
-            <h2 style={{ fontFamily: "'Fraunces',serif", fontSize: 24, fontWeight: 700, marginBottom: 20 }}>Food guide</h2>
-            {country.food ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {country.food.must_try && (
-                  <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 16, padding: '20px 24px' }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: '#22c55e', marginBottom: 12 }}>Must try</div>
-                    {Array.isArray(country.food.must_try) ? country.food.must_try.map((item: any, i: number) => (
-                      <div key={i} style={{ padding: '10px 0', borderBottom: '1px solid rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.75)', fontSize: 14 }}>
-                        🍽️ {typeof item === 'string' ? item : item.name || JSON.stringify(item)}
-                      </div>
-                    )) : <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.6)' }}>{String(country.food.must_try)}</p>}
-                  </div>
-                )}
-                {country.food.avoid && (
-                  <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 16, padding: '20px 24px' }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: '#ef4444', marginBottom: 12 }}>Avoid</div>
-                    {Array.isArray(country.food.avoid) ? country.food.avoid.map((item: any, i: number) => (
-                      <div key={i} style={{ padding: '10px 0', borderBottom: '1px solid rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.75)', fontSize: 14 }}>
-                        ⚠️ {typeof item === 'string' ? item : item.name || JSON.stringify(item)}
-                      </div>
-                    )) : <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.6)' }}>{String(country.food.avoid)}</p>}
-                  </div>
-                )}
-                {country.food.tips && (
-                  <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 16, padding: '20px 24px' }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: '#3b82f6', marginBottom: 12 }}>Tips</div>
-                    <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.6)', lineHeight: 1.7 }}>{typeof country.food.tips === 'string' ? country.food.tips : JSON.stringify(country.food.tips)}</p>
-                  </div>
-                )}
-                {!country.food.must_try && !country.food.avoid && !country.food.tips && (
-                  <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 16, padding: '20px 24px' }}>
-                    <pre style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{JSON.stringify(country.food, null, 2)}</pre>
-                  </div>
-                )}
+        {/* Live rates table */}
+        {ratesData?.rates && (
+          <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 20, overflow: 'hidden' }}>
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ fontSize: 13, fontWeight: 700 }}>Live rates (1 {from})</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#22c55e', fontWeight: 600 }}>
+                <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#22c55e' }} />
+                Live
               </div>
-            ) : <p style={{ color: 'rgba(255,255,255,0.4)' }}>No food data available.</p>}
-          </div>
-        )}
-
-        {/* SCAMS */}
-        {activeTab === 'Scams' && (
-          <div>
-            <h2 style={{ fontFamily: "'Fraunces',serif", fontSize: 24, fontWeight: 700, marginBottom: 20 }}>Scam alerts</h2>
-            {country.scams ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {Array.isArray(country.scams.scams) ? country.scams.scams.map((scam: any, i: number) => (
-                  <div key={i} style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 16, padding: '20px 24px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-                      <div style={{ width: 8, height: 8, borderRadius: '50%', background: scam.severity === 'high' ? '#ef4444' : scam.severity === 'medium' ? '#f59e0b' : '#22c55e', flexShrink: 0 }} />
-                      <div style={{ fontSize: 14, fontWeight: 700 }}>{scam.name || scam.title || `Scam ${i + 1}`}</div>
-                      {scam.severity && <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 4, background: scam.severity === 'high' ? 'rgba(239,68,68,0.15)' : 'rgba(245,158,11,0.15)', color: scam.severity === 'high' ? '#ef4444' : '#f59e0b', textTransform: 'uppercase' }}>{scam.severity}</span>}
-                    </div>
-                    {scam.description && <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.55)', lineHeight: 1.7, marginBottom: 10 }}>{scam.description}</p>}
-                    {scam.tip && <div style={{ fontSize: 12, color: '#22c55e', fontWeight: 600 }}>✓ {scam.tip}</div>}
-                  </div>
-                )) : (
-                  <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 16, padding: '20px 24px' }}>
-                    <pre style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{JSON.stringify(country.scams, null, 2)}</pre>
-                  </div>
-                )}
-              </div>
-            ) : <p style={{ color: 'rgba(255,255,255,0.4)' }}>No scam data available.</p>}
-          </div>
-        )}
-
-        {/* TRANSPORT */}
-        {activeTab === 'Transport' && (
-          <div>
-            <h2 style={{ fontFamily: "'Fraunces',serif", fontSize: 24, fontWeight: 700, marginBottom: 20 }}>Transport info</h2>
-            {country.transport ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {Object.entries(country.transport).filter(([k]) => k !== 'code' && k !== 'name').map(([key, value]) => (
-                  <div key={key} style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 16, padding: '20px 24px' }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: '#3b82f6', marginBottom: 10 }}>🚌 {key.replace(/_/g, ' ')}</div>
-                    <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.65)', lineHeight: 1.7 }}>{typeof value === 'string' ? value : JSON.stringify(value)}</p>
-                  </div>
-                ))}
-              </div>
-            ) : <p style={{ color: 'rgba(255,255,255,0.4)' }}>No transport data available.</p>}
-          </div>
-        )}
-
-        {/* VISA */}
-        {activeTab === 'Visa' && (
-          <div>
-            <h2 style={{ fontFamily: "'Fraunces',serif", fontSize: 24, fontWeight: 700, marginBottom: 20 }}>Visa requirements</h2>
-            {country.visa ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {Object.entries(country.visa).filter(([k]) => k !== 'code' && k !== 'name').map(([key, value]) => (
-                  <div key={key} style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 16, padding: '20px 24px' }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: '#7c3aed', marginBottom: 10 }}>🛂 {key.replace(/_/g, ' ')}</div>
-                    <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.65)', lineHeight: 1.7 }}>{typeof value === 'string' ? value : JSON.stringify(value)}</p>
-                  </div>
-                ))}
-              </div>
-            ) : <p style={{ color: 'rgba(255,255,255,0.4)' }}>No visa data available.</p>}
-          </div>
-        )}
-
-        {/* MAP */}
-        {activeTab === 'Map' && (
-          <div>
-            <h2 style={{ fontFamily: "'Fraunces',serif", fontSize: 24, fontWeight: 700, marginBottom: 20 }}>Map</h2>
-            <Suspense fallback={<div style={{ height: 300, background: 'rgba(255,255,255,0.04)', borderRadius: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.4)' }}>Loading map...</div>}>
-              <CountryMap countryCode={country.code} countryName={country.name} flag={country.flag} />
-            </Suspense>
-            <div style={{ marginTop: 16, padding: '16px 20px', background: 'rgba(124,58,237,0.08)', border: '1px solid rgba(124,58,237,0.2)', borderRadius: 12, fontSize: 13, color: 'rgba(255,255,255,0.6)', lineHeight: 1.6 }}>
-              🗺️ Map data from OpenStreetMap. Scroll to zoom, drag to pan.
             </div>
+            <div style={{ maxHeight: 320, overflowY: 'auto' as const }}>
+              {['INR', 'EUR', 'GBP', 'JPY', 'AUD', 'CAD', 'CHF', 'CNY', 'AED', 'SGD', 'THB', 'MXN', 'BRL', 'ZAR', 'TRY', 'KRW', 'HKD', 'NOK', 'SEK', 'DKK'].filter(c => c !== from && ratesData.rates[c]).map((currency, i) => {
+                const fromRate = ratesData.rates[from] || 1
+                const toRate = ratesData.rates[currency]
+                const rate = (toRate / fromRate).toFixed(4)
+                return (
+                  <div
+                    key={currency}
+                    onClick={() => { setTo(currency); setResult(null) }}
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 20px', borderBottom: '1px solid rgba(255,255,255,0.04)', cursor: 'pointer', background: to === currency ? 'rgba(124,58,237,0.08)' : 'transparent', transition: 'background 0.15s' }}
+                  >
+                    <div style={{ fontSize: 14, fontWeight: 600 }}>{currency}</div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: to === currency ? '#a78bfa' : 'rgba(255,255,255,0.7)' }}>{rate}</div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {isLoading && (
+          <div style={{ textAlign: 'center' as const, padding: '40px 0', color: 'rgba(255,255,255,0.3)', fontSize: 14 }}>
+            Loading rates...
           </div>
         )}
       </div>
