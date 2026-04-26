@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import api from '../lib/api'
 
@@ -201,7 +201,7 @@ export default function CurrencyPage() {
               </div>
             </div>
             <div style={{ maxHeight: 320, overflowY: 'auto' as const }}>
-              {['INR', 'EUR', 'GBP', 'JPY', 'AUD', 'CAD', 'CHF', 'CNY', 'AED', 'SGD', 'THB', 'MXN', 'BRL', 'ZAR', 'TRY', 'KRW', 'HKD', 'NOK', 'SEK', 'DKK'].filter(c => c !== from && ratesData.rates[c]).map((currency, i) => {
+              {['INR', 'EUR', 'GBP', 'JPY', 'AUD', 'CAD', 'CHF', 'CNY', 'AED', 'SGD', 'THB', 'MXN', 'BRL', 'ZAR', 'TRY', 'KRW', 'HKD', 'NOK', 'SEK', 'DKK'].filter(c => c !== from && ratesData.rates[c]).map((currency) => {
                 const fromRate = ratesData.rates[from] || 1
                 const toRate = ratesData.rates[currency]
                 const rate = (toRate / fromRate).toFixed(4)
